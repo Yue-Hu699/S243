@@ -1,0 +1,49 @@
+
+2a)wget -O UNdata.zip "http://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=itemCode:526&DataMartId=FAO&Format=csv&c=2,3,4,5,6,7&s=countryName:asc,elementCode:asc,year:desc"
+	#download from the URL and name it UNdata.zip
+$ unzip UNdata.zip
+	# unzip the file
+$ grep ".*+" UNdata_Export_20170907_065121679.csv > regions.csv
+$ grep -v ".*+" UNdata_Export_20170907_065121679.csv > countries.csv
+	#data for regions comes with + in the end. so grep these and pipe into regions.csv; grep the rest and pipe into countries.csv
+$ grep "Area Harvested\"\,\"2005" countries.csv | cut -d',' -f1,6 | sed 's/\"//g' |sort -t',' -k 2 -nr |head -5
+	#grep the subset, get the 1st and 6th colum, remove the double quoates, then sort and show the top 5
+$ for ((yr=1965; yr<=2005; yr+=10)); do grep "Area Harvested\"\,\"${yr}" countries.csv | cut -d',' -f1,4,6 | sed 's/\"//g' |sort -t',' -k 3 -nr |head -5; done
+	#use a for loop and set step=10 
+#output shows the oder does change.
+USSR,1965,60000.00000
+Turkey,1965,46500.00000
+United States of America,1965,15460.00000
+Spain,1965,15100.00000
+Tunisia,1965,15000.00000
+USSR,1975,71000.00000
+Turkey,1975,41500.00000
+Spain,1975,23300.00000
+Tunisia,1975,18981.00000
+Italy,1975,14000.00000
+Turkey,1985,47250.00000
+USSR,1985,45000.00000
+Spain,1985,20000.00000
+Tunisia,1985,15000.00000
+Italy,1985,14470.00000
+Turkey,1995,57355.00000
+Spain,1995,22500.00000
+Ukraine,1995,18600.00000
+Tunisia,1995,17000.00000
+Russian Federation,1995,16000.00000
+Turkey,2005,60000.00000
+Pakistan,2005,28884.00000
+Uzbekistan,2005,28000.00000
+Algeria,2005,22888.00000
+Spain,2005,19249.00000
+
+2b)function myfun(){ if wget -O UNdata1.zip "http://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=itemCode:$1&DataMartId=FAO&Format=csv&c=2,3,4,5,6,7&s=countryName:asc,elementCode:asc,year:desc" ; then  unzip -p UNdata1.zip ;echo "yes"; else echo "wrong number"; fi; }
+	#for -h:
+	#function myfun(){ if $1=="-h"; then echo"put in a number"; fi; if wget -O UNdata1.zip "http://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=itemCode:$1&DataMartId=FAO&Format=csv&c=2,3,4,5,6,7&s=countryName:asc,elementCode:asc,year:desc" ; then  unzip -p UNdata1.zip ;echo "yes"; else echo "wrong number"; fi; }
+
+3)	#$ wget -A txt -r -nd "http://www1.ncdc.noaa.gov/pub/data/ghcn/daily/"
+
+$ grep -Eo 'href="[.*.txt]"' | sed 's/<a href=\"/https:\/\/www1.ncdc.noaa.gov\/pub\/data\/ghcn\/daily\//g' | sed 's/\">/\n/g' >>temp.txt
+	#use -o to extract only the things in quatations, then replace the head with url, replace the tail with \n to change line. 
+$ wget -i temp.txt
+	#use wget -i to read each line and download
