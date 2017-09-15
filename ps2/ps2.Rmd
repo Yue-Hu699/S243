@@ -1,0 +1,227 @@
+---
+title: "Problem Set 2"
+author: 'Yue Hu  #3033030912'
+date: "Sept/15/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+```
+
+# Problem 1
+##1 a)
+for chars <- sample(letters, 1e6, replace = TRUE)
+write.table(chars, file = 'tmp1.csv', row.names = FALSE, quote = FALSE, col.names = FALSE)
+each letter takes up 1 byte, and each line-break takes up 1 byte, so 1e6 items in an ASCII file takes 2e6 bytes.
+
+for chars <- paste(chars, collapse = '')
+write.table(chars, file = 'tmp2.csv', row.names = FALSE, quote = FALSE, col.names = FALSE)
+each letter takes up 1 byte and there is no line-break in between. so in this ASCII file 1e6 letters and a line-break in the end takes (1e6+1) bytes.
+
+for nums <- rnorm(1e6)
+save(nums, file = 'tmp3.Rda')
+each number is treated as double format, taking 8bytes, so 1e6 numbers take approx. 8e6 bytes.
+
+for write.table(nums, file = 'tmp4.csv', row.names = FALSE, quote = FALSE,
+col.names = FALSE, sep = ',')\
+each number is treated as a series of characters, each taking 1 byte, so the file size is obviously larger.
+
+for write.table(round(nums, 2), file = 'tmp5.csv', row.names = FALSE,
+quote = FALSE, col.names = FALSE, sep = ',')
+each number is 2 decimal, with 4 characters. so 1e6 numbers plus line-breaks will take approx. 5e6 bytes.
+
+## 1 b)
+for chars <- sample(letters, 1e6, replace = TRUE)
+chars <- paste(chars, collapse = '')
+save(chars, file = 'tmp6.Rda')
+The save function has deault seting of ascii = FALSE and compress= isTRUE, and will write a binary file applying gzip compresssion. That's why the file format is much smaller.
+
+For chars <- rep('a', 1e6)
+chars <- paste(chars, collapse = '')
+save(chars, file = 'tmp7.Rda')
+The gzip is based on DEFLATE algorithm. If a duplicate series of bytes is spotted (a repeated string), then a back-reference is inserted, linking to the previous location of that identical string instead. So 1e6 identical character 'a' is even more compressed. 
+
+```{r, test-2a, eval=FALSE, include=FALSE}
+library(httr)
+library(XML)
+library(curl)
+name <- "steve glaser"
+name2 <- gsub("\ ","+", name)
+baseURL <- "http://scholar.google.com"
+filter1 <- paste0("/citations?view_op=search_authors&mauthors=", name2, "&hl=en&oi=ao&pagesize=80")
+url1 <- paste0(baseURL, filter1)
+html1 <- htmlParse(url1)
+nodeh3set <- getNodeSet(html1, "//h3[@class = 'gsc_1usr_name']")
+a <- sapply(nodeh3set, xmlChildren)
+href <- sapply(a,xmlGetAttr, "href")
+url2 <- paste0(baseURL,href,"&pagesize=80")
+html2 <- htmlParse(url2)
+id <- gsub('.*user=(.*?)&.*', '\\1', href)
+url2
+
+```
+
+
+# Problem2
+## 2 (a)  
+Create a function whose input is the character string of the name of the researcher and whose output is the html text corresponding to the researcher citation page as well as the researche's Google Scholar ID
+
+```{r, 2a}
+scholar <- function(name){
+  library(XML)
+  name2 <- gsub("\ ","+", name)
+  #from the http request we can see that each blank space (including in the beginning and multiple space in the space) is replaced by a +.
+  baseURL <- "http://scholar.google.com"
+  filter1 <- paste0("/citations?view_op=search_authors&mauthors=", name2, "&hl=en&oi=ao")
+  url1 <- paste0(baseURL, filter1)
+  #construct url
+  html1 <- htmlParse(url1)
+  #download html. The object returned by htmlParse() produces nicely formatted text
+  nodeh3set <- getNodeSet(html1, "//h3[@class = 'gsc_1usr_name']")
+  #find nodeset named h3 and has attribute as gsc_1usr_name, where the ID lies.
+  a <- sapply(nodeh3set, xmlChildren)
+  href <- sapply(a,xmlGetAttr, "href")
+  #href is the attribute of its child node a 
+  url2 <- paste0(baseURL,href)
+  html2 <- htmlParse(url2)
+  #download the new html
+  id <- gsub('.*user=(.*?)&.*', '\\1', href)
+  #the href, for example "/citations?user=CXJuZ5YAAAAJ&hl=en&oe=ASCII" ,includes the user id.use regex to extract the part after "user="and before "&", non-greedy match.
+  #return a list of id and html
+  slist <- list("id"=id, "html"=html2)
+  return(slist)
+}
+d <- scholar(" Geoffrey Hinton")
+
+```
+## 2 (b)
+Create a second function to process the resulting HTML to create an R data frame that contains the article title, authors, journal information, year of publication, and number of citations as five columns of information. 
+
+```{r, 2b}
+df <- function(name){
+  html2 <- scholar(name)[["html"]]
+  #use function in 2a to get the html
+  #All information lies in one table . Since article name, author and journal is in the same table cell, separated by <div>, directly using readHTMLTable will paste them together. So I use XPath to substrct the table, read each part as a vector, and merge them to a dataframe.
+  #All information lies in one table element whose class is 'gsc_a_t',use //td[@class = 'gsc_a_t'] to locate them
+  narticle <- xpathSApply(html2, "//td[@class = 'gsc_a_t']/a")
+  article <- sapply(narticle, xmlValue)
+    #get the child element, whose value is the article name  
+  nauthor <- xpathSApply(html2, "//td[@class = 'gsc_a_t']/div[1]")
+  author <- sapply(nauthor, xmlValue)
+  #get the first "div" child element, whose value is author  
+  njn <- xpathSApply(html2, "//td[@class = 'gsc_a_t']/div[2]")
+  journal <- sapply(njn, xmlValue)
+  #get the  second "div" child element, whose value is journal  
+  ncited <- xpathSApply(html2, "//td[@class = 'gsc_a_c']")
+  nyear <- xpathSApply(html2, "//td[@class = 'gsc_a_y']")
+  cited <- sapply(ncited, xmlValue)
+  year <- sapply(nyear, xmlValue)
+  year <- sapply(year, as.numeric)
+  cited <- sapply(cited, as.numeric)
+  #get table cell elements whose classes are 'gsc_a_c' and 'gsc_a_y', whose value is cited number and year. change them to numeric
+  df <- cbind.data.frame(article, author, journal, cited, year, stringsAsFactors=FALSE)
+  #merge them to form a dataframe
+  return(df)
+}
+
+#Try the function on a second researcher to provide more confidence that the function is working properly.
+
+df("Steven Glaser")
+
+
+```
+## 2(c) 
+include checks in your code so that it fails gracefully if the user provides invalid input or Google Scholar doesn't return a result. Also write some test code that uses the testthat package to carry out a small number of tests of your function.
+```{r ,2c}
+scholar <- function(name=NULL){
+  if (is.null(name))
+        stop("Need to specify a name.")
+  #check if a value is entered
+  if (is.character(name)==FALSE) stop("'name' must be string")
+  #check if it is a string
+  name2 <- gsub("\ ","+", name)
+  baseURL <- "http://scholar.google.com"
+  filter1 <- paste0("/citations?view_op=search_authors&mauthors=", name2, "&hl=en&oi=ao")
+  url1 <- paste0(baseURL, filter1)
+  html1 <- htmlParse(url1)
+  nodeh3set <- getNodeSet(html1, "//h3[@class = 'gsc_1usr_name']")
+  a <- sapply(nodeh3set, xmlChildren)
+  href <- sapply(a,xmlGetAttr, "href")
+  url2 <- paste0(baseURL,href)
+  html2 <- htmlParse(url2)
+  id <- gsub('.*user=(.*?)&.*', '\\1', href)
+  #check if the scholar exists
+  if (length(id)==0) stop("didn't match any user profiles")
+  slist <- list("id"=id, "html"=html2)
+  return(slist)
+}
+
+#use testthat for tests
+
+library(testthat)
+context("Test df")
+
+test_that("returning dataframe has dimension of (20,5)", {
+  expect_equal(dim(df("Steven Glaser")),c(20,5) )
+  expect_equal(dim(df("Geoffrey Hinton")),c(20,5) )
+ })
+
+test_that("returning cited times is numeric", {
+  expect_equal(class(df("Steven Glaser")[,"cited"]),"numeric")
+  expect_equal(class(df("Geoffrey Hinton")[,"cited"]),"numeric")
+
+})
+```
+
+## 2(d)
+(Extra credit) Fix your function so that you get all of the results for a researcher and not just the irst 20. 
+```{r 2d}
+scholar2 <- function(name){
+  library(XML)
+  name2 <- gsub("\ ","+", name)
+  baseURL <- "http://scholar.google.com"
+  filter1 <- paste0("/citations?view_op=search_authors&mauthors=", name2, "&hl=en&oi=ao")
+  url1 <- paste0(baseURL, filter1)
+  html1 <- htmlParse(url1)
+  nodeh3set <- getNodeSet(html1, "//h3[@class = 'gsc_1usr_name']")
+  a <- sapply(nodeh3set, xmlChildren)
+  href <- sapply(a,xmlGetAttr, "href")
+  
+  #Check the http request and found that another aurgument named pages is applied. rewrite the url accordingly.
+  url2 <- paste0(baseURL,href,"&pagesize=80")
+  html2 <- htmlParse(url2)
+  id <- gsub('.*user=(.*?)&.*', '\\1', href)
+  slist <- list("id"=id, "html"=html2)
+  return(slist)
+}
+
+
+df2 <- function(name){
+  html2 <- scholar2(name)[["html"]]
+  node <- getNodeSet(html2,"//td[@class = 'gsc_a_t']")
+  narticle <- xpathSApply(html2, "//td[@class = 'gsc_a_t']/a")
+  article <- sapply(narticle, xmlValue)
+  nauthor <- xpathSApply(html2, "//td[@class = 'gsc_a_t']/div[1]")
+  author <- sapply(nauthor, xmlValue)
+  njn <- xpathSApply(html2, "//td[@class = 'gsc_a_t']/div[2]")
+  journal <- sapply(njn, xmlValue)
+  ncited <- xpathSApply(html2, "//td[@class = 'gsc_a_c']")
+  nyear <- xpathSApply(html2, "//td[@class = 'gsc_a_y']")
+  cited <- sapply(ncited, xmlValue)
+  year <- sapply(nyear, xmlValue)
+  year <- sapply(year, as.numeric)
+  cited <- sapply(cited, as.numeric)
+  df <- cbind.data.frame(article, author, journal, cited, year, stringsAsFactors=FALSE)
+  
+  
+  return(df)
+}
+
+head(df2("steven glaser"),)
+```
+# Notes
+Person I worked with : Hangyu Huang
