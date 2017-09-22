@@ -1,0 +1,22 @@
+Comments on using Whitespace (use a lot of it. Some places where it is good to have it are (1) around operators (assignment and arithmetic), (2) between function arguments and list elements, (3) between matrix/array indices, in particular for missing indices.)
+Though not necessary for the machine to read without these whitespaces, this makes syntaxes more readable, like composing an English sentence. 
+
+Note:Where documentation is necessary:(1) summarizing a block of code, (2) explaining a very complicated piece of code - recall our complicated regular expressions, (3) explaining arbitrary constant values.
+
+Comment about constant values (Don¡¯t hard code numbers - use variables (e.g., number of iterations, parameter values in simulations), even if you don¡¯t expect to change the value, as this makes the code more readable)
+This also later changhes to these constant easier, you don't need to read inside the lines.
+
+Question about Keeping a document describing your running analysis with dates in a text file (i.e., a lab book): Is it necessary if you already explained what the code is doing inside your code file, and also added comment of what you did when commiting to version controller.  ( And Is there a sample of this? how should they be formated?)
+
+Question: What is a good plain text editor for documentation and lab book on windows? Or just use MS Word and save it as .txt?
+
+Note about how to creat names: To avoid the possibility of errors later in the workflow, spaces, periods, and slashes should not be used in file name
+Comments:use '_' or '-' inside names to replace spaces and hold a constant style.
+
+Note: doing reprodicible research is a scientific attitude. And its benifit include making later chkeckout and revise easier, making colaborating work easier, and making results more convinsible.
+
+Question about Save your output at intermediate steps (including the random seed state) so you can restart if an error occurs or a computer fails. Using save() and save.image() to write to .RData files work well for this
+In testing and seed state the output might be ramdom and in a mess,since errors always accur during these stage. Why should they be saved? instead of saving them I sometimes prefer deleting all of them and start runing program from anew. 
+
+
+Notes: Two important things for reproducible research: using scriping, and making version control. one thing good about version control is that it maintains a single, authoritative version of the directory at all times 
