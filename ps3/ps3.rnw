@@ -1,0 +1,177 @@
+\documentclass{article}
+\usepackage{natbib}
+\usepackage[unicode=true]{hyperref}
+\usepackage{geometry}
+\geometry{tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+  
+  
+\begin{document} 
+\SweaveOpts{concordance=TRUE}
+\title{Problem Set 3}
+\author{Yue Hu}
+\date{Sept 2017}
+
+<<setup, include=FALSE>>=
+library(knitr) # need this for opts_chunk command
+opts_chunk$set(fig.width = 5, fig.height = 5)
+@ 
+
+\maketitle
+
+\section{problem 2}
+Did all process and calculations with apply or sapply, no loops. When calculating average number of words per chunk used a nested sapply.
+<<r-chunk1>>=
+library(XML)
+library(stringr)
+
+## download and read the whole txt, and maitain the structure of lines
+# download.file("http://www.gutenberg.org/cache/epub/100/pg100.txt", "page100.txt")
+txt <- scan(file="page100.txt", what = "character", sep="\n")
+
+
+#constent formating
+txt <- gsub("scene I\\.", "scene 1\\.", txt, ignore.case = TRUE)
+txt <- gsub("ACT I\\.", "act 1\\.", txt, ignore.case = TRUE)
+
+# grep the index of starts of plays(a year of 4 digit), and index of end with "THE END"
+# Then use the list of index to construct a list of plays using appply.
+start <- grep( "^[[:digit:]]{4}", txt)
+end = grep("THE END", txt)
+exstart <- start[2:(length(start)-1)]
+exend <- end[2:(length(end)-1)]
+index <- data.frame(s = exstart, e = exend)
+allplays <- apply(index,1,  function(x) {txt[x[1]:x[2]]})
+
+
+## alternative using for loop to construct list of all plays
+# allplays <- list()
+# total <- length(start)
+# for (i in 2:(total-1)) {
+#   play <- txt[start[i]:end[i]]
+#   allplays[[i-1]] <- play
+# }
+
+  
+
+# cal num of plays
+numofplays <- length(allplays)
+cat(numofplays)
+
+
+# extract years (The first line of each play), and names( second line), and body(from 4th line onwards.)
+years <- sapply(allplays, '[[', 1)
+names <- sapply(allplays, '[[', 2)
+body <- sapply(allplays, function(x) {x[-(1:3)]})
+
+#Every act has at least a scene 1, grep them to count num of acts; TRUE is to ignore cases
+acts<- sapply(body, function(x) {grep(regex("scene 1\\.", TRUE), x, ignore.case = TRUE)})
+acts[[4]] <- c(1,2,3,4,5)
+acts[[30]] <- c(1,2,3,4,5)
+nacts <- sapply(acts, function(x) {length(x)})
+
+# count number of scenes, a pattern of scene then anything then a dot
+scenes <- sapply(body, function(x) {grep(regex("scene .*\\.$", TRUE), x, ignore.case = TRUE)})
+# for special case in No.4 and No.30 where scenen doesn't end with .
+scenes[[4]] <- grep(regex("scene ", TRUE), body[[30]], ignore.case = TRUE)
+scenes[[30]] <- grep(regex("scene ", TRUE), body[[30]], ignore.case = TRUE)
+
+nscenes <- sapply(scenes, function(x) {length(x)})
+
+# merge into dataframe
+df <- data.frame(year = years, titile = names, nacts = nacts, nscenes = nscenes)
+df
+
+##2c
+
+## start from "act 1. scene 1" to precisely extract parts including chunks, excludes headings, copy rights, Dramatis personae and so on this way. 
+bodystart <- grep(regex("act 1\\. scene 1", TRUE), txt, ignore.case = TRUE)
+bodyend <- end[2:(length(end)-1)]
+index <- data.frame(s = bodystart, e = bodyend)
+bodys <- apply(index,1,  function(x) {txt[x[1]:x[2]]})
+
+
+# two indentations indecates a new speaker, substitute them with a $ sign
+bodys <- sapply(bodys, function(x) {gsub("^[[:space:]]{2}(\\w+\\..*)", "\\$\\1", x)})
+# four indentations then a word then anything(word or spaces) indecates a following chunk, substitute them with a @ sign
+bodys <- sapply(bodys, function(x) {gsub("^[[:space:]]{4}\\w(.*)", "\\@\\1", x)})
+# paste them form several lines into a long string and mark original lines with '\n' at each line end.
+bodys <- sapply(bodys, function(x) {paste(x, collapse = '\n')})
+# each chunk with speaker is a pattern of "$blahblah\n" followed by "@blahblah\n"zero or more times, exreact them. 
+chunks <- sapply(bodys, function(x) {str_extract_all(x,"\\$(.*?)\n(\\@(.*?)\n)*")})
+#remove all indecators ($ @ \n)
+chunks <- sapply(chunks, function(x) {gsub("(\\@|\\$|\n)", '', x)})
+
+# split speacker and dialogue by ". ". Set n=2 so creat 2 elements at most.
+chunksum <- sapply(chunks, function(x) {str_split(x, "\\. ", n = 2)})
+
+
+##d
+
+# separate speakers and dialogues into different lists
+speakers <- sapply(chunks, function(x) {gsub("(\\w+)\\.(.*)", "\\1", x)})
+chunktxt <- sapply(chunks, function(x) {gsub("(\\w+)\\.(.*)", "\\2", x)})
+
+# find uniqie speakers and calculate the number
+uspe <- sapply(speakers,unique)
+nspe <- sapply(uspe,length )
+# Calculate the number of chunks
+nchun <- sapply(chunktxt,length )
+
+# paste all sentences of chunks, then calculate sentences, indicated by num. or words followed by .?!
+sumsentence <- sapply(chunktxt, function(x) paste(x, collapse = ' ') )
+nsent <- sapply(sumsentence, function(x) {length(str_extract_all(x, "(\\d|\\w)(\\.|\\!|\\?)")[[1]])})
+# extract words (at least one character fllowed by one or more ' then one or more words.)
+words <- sapply(sumsentence, function(t) {str_extract_all(t, "\\w+\\'?\\w*")})
+nwords <- sapply(words, length)
+
+#split text in each chunk to single words
+chunkword <- sapply(chunktxt, function(t) {str_extract_all(t, "\\w+\\'?\\w*")})
+#count the length. use a nested sapply since each element of play is itself a list
+nchunkword <- sapply(chunkword, function(x) {sapply(x, length)})
+# count the mean of each element list
+aveword <- sapply(nchunkword, mean)
+
+# find uniqie words and calculate the number
+uwords <- sapply(words,unique)
+nuwords <- sapply(uwords,length )
+
+
+## e
+nyear <- as.numeric(years)
+nspe <- as.numeric(nspe)
+nchun <- as.numeric(nchun)
+summary <- data.frame(year = nyear, acts_num = nacts, scene_num = nscenes, speaker_num = nspe, chunk_num = nchun)
+
+# sort by year
+summarys <- summary[order(summary[,1]),]
+summary
+# plot 
+plot.ts(summarys)
+@
+
+\section{Problem 3}
+
+\subsection{a)}
+1)class: Play
+fields:
+name ## a string charactor of the play tittle
+year ## a numeric of the year of the play
+body ## a list of Body Objects
+2£©class: Body 
+fields:
+speakers ## a list of the speakers of each chunk in sequece
+chunks   ## a list of the dialogue chunks in sequece
+\subsection{b)}                
+Methods for Plays:
+'<-'  ## input is the url link or path of the whole txt and the output is a list of objects in Play class by processing the whole txt.
+print ##print the name , year, and the first 10 elements of the body
+printchunk ## input is input is Play object and a list of numbers. output is the elements of it's bod
+y(i.e. speakers and chunks) by number index
+playSummary ## input is Play object and out put is a data frame with column (num_of_acts, num_of_scenes
+, num_of_speakers)
+bodySummary ## input is Play object and out put is a data frame with columns (num_of_chunks, num_of_sen
+tences, num_of_words num_of_unique_words)
+Plot ## input is a bunck of Play objects and output is a series of plots on number of acts and scenes, number of unique speakers, and number of chunks over time.
+        
+
+\end{document}
