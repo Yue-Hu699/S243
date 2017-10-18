@@ -1,0 +1,351 @@
+\documentclass{article}
+\usepackage{natbib}
+\usepackage[unicode=true]{hyperref}
+\usepackage{geometry}
+\geometry{tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+
+\begin{document} 
+\SweaveOpts{concordance=TRUE}
+\title{Problem Set 4}
+\author{Yue Hu}
+\date{Oct 2017}
+
+\maketitle
+
+
+\section{problem 1}
+\subsection{a)} 
+Since there is no change on the vector 1:10, ther is only one copy. Both name x and data points to the same memory location.
+
+\subsection{b)}
+
+<<r-chunk1>>=
+x <- 1:1e6
+f <- function(input){
+  data <- input
+  g <- function(param) return(param * data)
+  return(g)
+}
+myFun <- f(x)
+data <- 100
+Binary <- serialize(myFun, NULL)
+object.size(x)
+object.size(Binary)
+@
+We can see although input vector is 4M, the total size of the closure is about 8M. Seems there is two copies, because serialize doesn't know they are from the same memory location, and write them into binary as two.
+
+\subsection{c)}
+When x is passed to f(x), it is not evaluated until being called, which is called lazy-evaluation. So not until myFun is acutally callled by myFun(3) does the program begin to search for what x is.But at this time x is removed so r can't find it.
+
+\subsection{d)}
+We can assign values to data directly in the environment of myFun. The closure is 4M, which is the size of the data.
+<<r-chunk2>>=
+f <- function(data){
+  g <- function(param) return(param * data)
+  return(g)
+}
+myFun <- f(x)
+environment(myFun)$data <- 1:1e6
+Binary <- serialize(myFun, NULL) 
+data <- 100
+object.size(Binary)
+@
+
+In another way,no copy of data is in the closure now and when it's called it looked for f(1:1e6) to find that input argument is 1e6. the resulting closure is 824 bytes. 
+<<r-chunk2_>>=
+f <- function(data){
+  g <- function(param) return(param * data)
+  return(g)
+}
+myFun <- f(1:1e6)
+Binary <- serialize(myFun, NULL) 
+data <- 100
+object.size(x)
+object.size(Binary)
+@
+
+
+\section{problem 2}
+\subsection{a)} 
+<<r-chunk3>>=
+library(pryr)
+l <- list(rnorm(1:1e8), rnorm(1:1e8))
+.Internal(inspect(l))
+mem_change(l[[1]][1] <- 4)
+.Internal(inspect(l))
+@
+When we modify an element of one of the vectors, the change was crated in place and no new list or vector is made.
+From the result, no vector changed place. Only several KB memory change takes place, which is far less than the length of the vector.
+
+\subsection{b)} 
+<<r-chunk4>>=
+mem_change(lCopy <- l)
+.Internal(inspect(l))
+.Internal(inspect(lCopy))
+mem_change(lCopy[[1]][1] <- 8)
+.Internal(inspect(l))
+.Internal(inspect(lCopy))
+@
+When a copy of list is made, the rule of copy-on-change goes on and no new copys of the data is made. Memory does't change.
+When one of the vectors of one of the list is modified, only a copy of the relevant vector is made.
+From the result, only the place of modified vector changed. 800mb memory change takes place, which is the length of the vector.
+
+\subsection{c)} 
+<<r-chunk5>>=
+library(pryr)
+l <- list( a= rnorm(1e6),
+           b= list(b1 = rnorm(1e6),b2 = rnorm(1e6)), 
+           c= list(c1 = rnorm(1e6)))
+lCopy <- l
+.Internal(inspect(l))
+.Internal(inspect(lCopy))
+mem_change(lCopy$b <- c(l$b, b3 = list(rnorm(1e6))))
+.Internal(inspect(l))
+.Internal(inspect(lCopy))
+@
+all original data is shared between two lists of lists, only one copy of new vector of the second list is made. The othter elements of the second list as well as other elements of the two lists is not changed or copied.
+From the result, only the place of appended vector changed. 8mb memory change takes place, which is the length of the vector.
+
+
+\subsection{d)} 
+<<r-chunk6d>>=
+gc()
+tmp <- list()
+x <- rnorm(1e7)
+tmp[[1]] <- x 
+tmp[[2]] <- x 
+.Internal(inspect(tmp)) 
+object.size(tmp)
+gc()
+
+@
+When we inspect we see that two vectors in the tmp list share the same location, so they take up 80MB in reality. But as documentation for object.size goes, this function merely provides a rough indication: it should be reasonably accurate for atomic vectors, but does not detect if elements of a list are shared, for example. 
+So it only adds up the size of two vectors not knowing they point to the same loaction.
+
+\section{problem 3}
+first check the original time
+ 
+<<r-chunk3-1>>=
+library(rbenchmark)
+load('ps4prob3.Rda') # should have A, n, K
+ll <- function(Theta, A) {
+  sum.ind <- which(A==1, arr.ind=T)
+  logLik <- sum(log(Theta[sum.ind])) - sum(Theta)
+  return(logLik)
+}
+oneUpdate <- function(A, n, K, theta.old, thresh = 0.1) {
+  theta.old1 <- theta.old
+  Theta.old <- theta.old %*% t(theta.old)
+  L.old <- ll(Theta.old, A)
+  q <- array(0, dim = c(n, n, K))
+  for (i in 1:n) {
+    for (j in 1:n) {
+      for (z in 1:K) {
+        if (theta.old[i, z]*theta.old[j, z] == 0){
+          q[i, j, z] <- 0
+        } else {
+          q[i, j, z] <- theta.old[i, z]*theta.old[j, z] /
+            Theta.old[i, j]
+        }
+      }
+    }
+  }
+  theta.new <- theta.old
+  for (z in 1:K) {
+    theta.new[,z] <- rowSums(A*q[,,z])/sqrt(sum(A*q[,,z]))
+  }
+  Theta.new <- theta.new %*% t(theta.new)
+  L.new <- ll(Theta.new, A)
+  converge.check <- abs(L.new - L.old) < thresh
+  theta.new <- theta.new/rowSums(theta.new)
+  return(list(theta = theta.new, loglik = L.new,
+              converged = converge.check))
+}
+# initialize the parameters at random starting values
+temp <- matrix(runif(n*K), n, K)
+theta.init <- temp/rowSums(temp)
+# do single update and check the time
+system.time(out <- oneUpdate(A, n, K, theta.init))
+@
+
+the rivised version uses matirx calculation to substitute 3 forloop with one forloop. Also, it reduced the repeatedly calculated A*q[,,z], also chaged some names to improve readability. 
+This can improve by about 11 folds.
+<<r-chunk3-2>>=
+load('ps4prob3.Rda') # should have A, n, K
+# Change the functiuon name to indicate its purpose
+GetLoglik <- function(Theta, A) {
+  sum.ind <- which(A==1, arr.ind=T)
+  logLik <- sum(log(Theta[sum.ind])) - sum(Theta)
+  return(logLik)
+}
+oneUpdate <- function(A, n, K, theta.old, thresh = 0.1) {
+  
+  theta.old1 <- theta.old
+  Theta.old <- theta.old %*% t(theta.old)
+  # use Loglik instead of L to indecate its meaning
+  Loglik.old <- GetLoglik(Theta.old, A)
+  q <- array(0, dim = c(n, n, K))
+  # use matirx calculation to substitute 3 forloop with one forloop
+  for (z in 1:K){
+    q[,,z] <- theta.old[,z]%*% t(theta.old[,z])/Theta.old
+      } 
+  theta.new <- theta.old
+  for (z in 1:K) {
+    # A*q[,,z] is repeatedly calculated. calculate once and store in temp matrx
+    temp <- A*q[,,z]
+    theta.new[,z] <- rowSums(temp)/sqrt(sum(temp))
+  }
+  Theta.new <- theta.new %*% t(theta.new)
+  Loglik.new <- GetLoglik(Theta.new, A)
+  converge.check <- abs(Loglik.new - Loglik.old) < thresh
+  theta.new <- theta.new/rowSums(theta.new)
+  return(list(theta = theta.new, loglik = Loglik.new,
+              converged = converge.check))
+}
+# initialize the parameters at random starting values
+temp <- matrix(runif(n*K), n, K)
+theta.init <- temp/rowSums(temp)
+# do single update and check the time
+system.time(out <- oneUpdate(A, n, K, theta.init))
+@
+to further improve,  two forloop can be merged together. Original q is a list of z (n*n)matrix,but we can just use one (n*n)matrix and overwright it z times to save space.
+This can improve it by 20 folds 
+<<r-chunk3-3>>=
+load('ps4prob3.Rda') # should have A, n, K
+# Change the functiuon name to indicate its purpose
+GetLoglik <- function(Theta, A) {
+  sum.ind <- which(A==1, arr.ind=T)
+  logLik <- sum(log(Theta[sum.ind])) - sum(Theta)
+  return(logLik)
+}
+oneUpdate1 <- function(A, n, K, theta.old, thresh = 0.1) {
+  
+  theta.old1 <- theta.old
+  Theta.old <- theta.old %*% t(theta.old)
+  # use Loglik instead of L to indecate its meaning
+  Loglik.old <- GetLoglik(Theta.old, A)
+  q <- matrix(0,n,n)
+  theta.new <- theta.old
+  # use matirx calculation to substitute 2 forloop
+  # and two forloop can be merged together. original q is a list of z (n*n)matrix, but we can just use one (n*n)matrix and overwright it z times to save space.
+  for (z in 1:K){
+    q <- theta.old[,z]%*% t(theta.old[,z])/Theta.old
+    temp <- A*q
+    theta.new[,z] <- theta.new[,z] <- rowSums(temp)/sqrt(sum(temp))
+  }
+  
+  Theta.new <- theta.new %*% t(theta.new)
+  Loglik.new <- GetLoglik(Theta.new, A)
+  converge.check <- abs(Loglik.new - Loglik.old) < thresh
+  theta.new <- theta.new/rowSums(theta.new)
+  return(list(theta = theta.new, loglik = Loglik.new,
+              converged = converge.check))
+}
+# initialize the parameters at random starting values
+temp <- matrix(runif(n*K), n, K)
+theta.init <- temp/rowSums(temp)
+# do single update
+system.time(out1 <- oneUpdate1(A, n, K, theta.init))
+benchmark(out <- oneUpdate1(A, n, K, theta.init), replications = 5)
+
+@
+
+\section{problem 4}
+\subsection{a)}
+use order instead of sort, since it only returns the index, and sort returns both index and original number, it cam speed up 2 times.
+
+<<r-plot1, fig.height = 3, fig.width= 4>>=
+library(microbenchmark)
+PIKK <- function(x, k) {
+  x[sort(runif(length(x)), index.return = TRUE)$ix[1:k]]
+}
+
+# revised version
+PIKK2 <- function(x, k) {
+ x[order(runif(length(x)))[1:k]]
+}
+
+# test on x whith length 1e4 to 5e5 and plot the time of two functions
+time <- list()
+time2 <- list()
+n <- c(10000, 100000, 500000)
+for (i in n){
+  x <- rnorm(i)
+  k <- i/100
+  benchm <- microbenchmark(PIKK(x,k), times = 100L)
+  benchm2 <- microbenchmark(PIKK2(x,k), times = 100L)
+  time <- c(time,mean(benchm$time))
+  time2 <- c(time2, mean(benchm2$time))
+}
+plot(n,time, type = "l", col = "red")
+lines(n, time2, col = "green")
+@
+
+another way for a is to only find the index of first k largest, insterad of sorting them all and exctract the first k.
+
+for b, only need to shuffle the first k elements and extract them. This can speed up 10 times.
+<<r-plot2, fig.height = 3, fig.width= 4>>=
+FYKD <- function(x, k) { 
+  n <- length(x) 
+  for(i in 1:n) {
+    j = sample(i:n, 1)
+    tmp <- x[i]
+    x[i] <- x[j]
+    x[j] <- tmp
+    }
+  return(x[1:k])
+}
+
+FYKD2 <- function(x, k) { 
+  n <- length(x) 
+  for(i in 1:k) {
+    j = sample(i:n, 1)
+    tmp <- x[i]
+    x[i] <- x[j]
+    x[j] <- tmp
+  }
+  return(x[1:k])
+}
+
+# test on x whith length 1e4 to 5e5 and plot the time of two functions
+time <- list()
+time2 <- list()
+n <- c(10000, 50000, 100000)
+for (i in n){
+  x <- rnorm(i)
+  k <- i/100
+  benchm <- microbenchmark(FYKD(x,k), times = 10L)
+  benchm2 <- microbenchmark(FYKD2(x,k), times = 10L)
+  time <- c(time,mean(benchm$time))
+  time2 <- c(time2, mean(benchm2$time))
+}
+plot(n,time, type = "l", col = "red")
+lines(n, time2, col = "green")
+
+
+@
+
+
+\subsection{b)}
+Another way to think about, which generate the random numbers in a vectorized fashion. this can spped up to 10 times of the original sample().
+<<r-chunk4-3>>=
+FYKD3 <- function(x, k) { 
+  sample <- array(0,dim = k)
+  n <- length(x)
+  # generate a ramdom int array (index) with a max of n, n-1,ect.
+  scale <- c(n:(n-k+1))
+  index2 <- floor(runif(k)*scale)+1
+  # for loop i, extract element according to index, (the pisition shold be between 1 and n-i+1) and replace that element with the (n-i+1)th element. Then the next loop looks for elements in pisition between 1 and n-i
+  for(i in 1:k) {
+    sample[i] <- x[index2[i]]
+    x[index2[i]] <- x[n-i+1]
+  }
+  return(sample)
+}
+
+microbenchmark(FYKD(x,k), times =50L)
+microbenchmark(FYKD3(x,k), times = 50L)
+
+@
+\end{document}
+
