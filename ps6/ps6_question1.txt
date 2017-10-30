@@ -1,0 +1,48 @@
+
+
+
+1.What are the goals of their simulation study and what are the metrics that they consider in assessing their method?
+
+Simulation studies were conducted to investigate the finite sample properties of the test. They assessing their method by eveluating the simulated significance levels for 2LR and 2LR*, and simulated powers.
+
+
+2.What choices did the authors have to make in designing their simulation study? What are the key aspects of the data generating mechanism that likely affect the statistical power of the test? Are there data-generating scenarios that the authors did not consider that would be useful to consider?
+
+Sample sizes n (a series from 50 to 1000), and # of sample to generate from the standard normal distribution for each sample size (1000).
+key aspect taht could affect the power: sample sizes, # of components, their mixing propotions, and the value D, there distance from each other.
+other scenarios: when standard variation differs from one another.
+
+
+3. Do their tables do a good job of presenting the simulation results and do you have any alternative suggestions for how to do this?
+Yes. It is clear to see the variation between different scenarios.
+It can plot several charts.
+
+
+4. Interpret their tables on power (Tables 2 and 4) - do the results make sense in terms of how the power varies as a function of the data generating mechanism?
+Yes. Since as sample size goes up the power should go up. And the further the components displaced from each other,(D goes up), the power should increase. Mixing proportion affects little.
+
+
+5. How do you think the authors decided to use 1000 simulations. Would 10 simulations be enough? How might we decide if 1000 simulations is enough?
+
+1000 times is resonable considering the efficiency and accuracy. 10 would be too small and the result would vary too much.
+
+We could run different # of samples for certain times, and when the result each time is not varying too much,i.e. they're converging and are within an acceptable range, then decide to use this # of samples.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
