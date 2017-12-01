@@ -1,0 +1,309 @@
+\documentclass{article}
+\usepackage{natbib}
+\usepackage[unicode=true]{hyperref}
+\usepackage{geometry}
+\usepackage{amsmath}
+\geometry{tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+
+<<setup, include=FALSE>>=
+library(EnvStats)
+require(fields)
+@
+
+\begin{document} 
+\title{Problem Set 8}
+\author{Yue Hu}
+\date{Nov 2017}
+
+\maketitle
+
+
+\section*{problem 1}
+\subsection*{(a)}
+Parato distribution is a heavy-tailed distribution and its tail decays more slowly to 0.
+\subsection*{(b)}
+<<r-chunk1, fig.width = 3 , fig.height = 3>>=
+library(EnvStats)
+# generate sample
+sample <- EnvStats::rpareto(10000, 2,3)
+
+##calculate Ex
+weightedX <- sapply(sample, function(x) {x*x^4*exp(2-x)/24})
+EX <- mean(weightedX)
+cat("Ex is", EX)
+hist(weightedX)
+
+#histogram of weight
+weight <- sapply(sample, function(x) {x^4*exp(2-x)/24})
+hist(weight)
+
+# calculate E(x^2)
+weightedX2 <- sapply(sample, function(x) {x^2*x^4*exp(2-x)/24})
+EX2 <- mean(weightedX2)
+cat("E(x^2) is", EX2)
+hist(weightedX2)
+@
+
+so we can see the value of EX and $E(X^2)$ is as expected.
+
+And the variance is relatively small and resonable.
+\subsection*{(c)}
+<<r-chunk2,fig.width = 3, fig.height = 3>>=
+# generate sample
+sample2 <- rexp(10000)
+sample2 <- sample2 +2
+
+#calculate Ex
+weightedXp <- sapply(sample2, function(x) {x*24/x^4/exp(2-x)})
+EXp <- mean(weightedXp)
+cat("EX is ", EXp)
+hist(weightedXp)
+
+#histogram of weight
+weightp <- sapply(sample2, function(x) {24/x^4/exp(2-x)})
+hist(weightp)
+ 
+#calculate E(X^2)
+weightedX2p <- sapply(sample2, function(x) {x^2*24/x^4/exp(2-x)})
+EX2p <- mean(weightedX2p)
+cat("E(X^2) is ", EX2p)
+hist(weightedX2p)
+@
+We can see the variance is much larger than previous case
+
+IN fact,when g has thinner tails than f, f/g can be unbounded ,and the variance of EX can be very large. 
+\section*{problem 2}
+<<r-chunk, fig.width = 4, fig.height = 3>>=
+theta <- function(x1,x2) atan2(x2, x1)/(2*pi)
+
+f <- function(x) {
+  f1 <- 10*(x[3] - 10*theta(x[1],x[2]))
+  f2 <- 10*(sqrt(x[1]^2 + x[2]^2) - 1)
+  f3 <- x[3]
+  return(f1^2 + f2^2 + f3^2)
+}
+
+# plot slices
+require(fields)
+x1s <- seq(-5, 5, len = 100)
+x2s = seq(-5, 5, len = 100)
+
+#slice with x3 = 10
+fx <- apply(cbind(expand.grid(x1s, x2s),10), 1, f)
+image.plot(x1s, x2s, matrix(log(fx), 100, 100))
+# slice with x3 = 1
+fx2 <- apply(cbind(expand.grid(x1s, x2s),1), 1, f)
+image.plot(x1s, x2s, matrix(log(fx2), 100, 100))
+
+# optimize by optim()
+init <- c(2,2,2)
+optim(init, f, method = 'BFGS', control = list(trace = TRUE)) 
+
+# use different starting points
+init <- c(-200,20000,10000)
+optim(init, f, method = 'BFGS', control = list(trace = TRUE)) 
+
+init <- c(2,2, 2)
+nlm(f,init)
+
+init <- c(2e16,2e16, -2e16)
+nlm(f,init)
+
+@
+
+so we can see that the optimum parameter for f is (1,0,0). With different starting points they roughtly stop at the same point, though some are reaching better minimums.
+
+\section*{Problem3}
+\subsection*{(a)}
+
+
+Set the value of censored data as Zi (i=1,2...c). And the rest value Yj (j=1,2...n-c) are known.And the liklihood should be
+$$
+P(Y_i,Z_i|X;\theta) = \prod_{i}(2\pi\sigma^2)^{-1/2}e^{-\frac{(Z_i-\beta_0-\beta_1x_i)^2}{2\sigma^2}}\prod_{j}(2\pi\sigma^2)^{-1/2}e^{-\frac{(y_j-\beta_0-\beta_1x_j)^2}{2\sigma^2}}
+$$
+and The log-liklihood shsould be
+$$
+LL(Y_i,Z_i|X;\theta) =-\frac{n}{2}log(2\pi\sigma^2)-\frac{1}{2\sigma^2}\sum_{i}(Z_i-\beta_0-\beta_1x_i)^2-\frac{1}{2\sigma^2}\sum_{j}(Y_i-\beta_0-\beta_1x_j)^2
+$$
+For the E step, calculate
+$$
+\begin{aligned}
+Q &= E(Y_i,Z_i|X;\theta)\\ &=E[-\frac{n}{2}log(2\pi\sigma^2)-\frac{1}{2\sigma^2}\sum_{i}(Z_i-\beta_0-\beta_1x_i)^2-\frac{1}{2\sigma^2}\sum_{j}(Y_i-\beta_0-\beta_1x_j)^2]\\
+ &= -\frac{n}{2}log(2\pi\sigma^2)-\frac{1}{2\sigma^2}\sum_{j}(Y_i-\beta_0-\beta_1x_j)^2-\frac{1}{2\sigma^2}\sum_{i}E[(Z_i-\beta_0-\beta_1x_i)^2]\\
+ &= -\frac{n}{2}log(2\pi\sigma^2)-\frac{1}{2\sigma^2}\sum_{j}(Y_i-\beta_0-\beta_1x_j)^2-\frac{1}{2\sigma^2}\sum_{i=1}^c[(E(Z_i)-\beta_0-\beta_1x_i)^2+Var(Zi)]\\
+ &= -\frac{n}{2}log(2\pi\sigma^2)-\frac{1}{2\sigma^2}\sum_{j=i}^{n-c}(Y_i-\beta_0-\beta_1x_j)^2-\frac{1}{2\sigma^2}\sum_{i=1}^c(E(Z_i)-\beta_0-\beta_1x_i)^2+cVar(Zi)
+\end{aligned}
+$$
+where $E(Z_i)$ and $Var(Z_i)$ is the expectation and variance of Zi based on the current value at iteration t, and should be comstant. 
+
+For M step, optimization is with respect to $\beta_0, \beta_1, \sigma $. 
+
+This is similar to linear regression and result should be
+$$
+\begin{aligned}
+\hat{\beta_0} &= \frac{\sum_{i}{(x_i-\bar{x_i})(Y_i-\bar{Y})}}{\sum_{i}{(x_i-\bar{x}})^2}\\
+\hat{\beta_1} &= \bar{Y}-\hat{\beta_0}\bar{x}\\
+\hat{\sigma^2} &= \frac{ \sum_{j=i}^{n-c}(Y_i-\hat{\beta_0}-\hat{\beta_1}x_j)^2+c(E_z-\hat{\beta_0}-\hat{\beta_1}x_j)^2+cVar(Z) }{n}
+\end{aligned}
+$$
+Where Yi is the uncensored data plus c censored data with values E(z)
+
+
+\subsection*{(b)}
+For initial value we can we can ignore datas where $y>\tau$, and use lm on the truncated y sequence.
+
+\subsection*{(c)}
+For the censored data we can use $E(W|W>\tau)$ for y values, then use lm on the new y sequence to get betas. For sigma, the first two terms is the $\sigma^2$ by lm, and we need only add V(z)/n to it and take the sqare root.
+
+We should break the optimization if  objective function ceases to change.In this case, when the previous state and the current state considered by the EM algorithm are not significantly large.
+<<r-chunk5>>=
+# simulate data
+set.seed(1)
+n <- 100
+beta0 <- 1
+beta1 <- 2
+sigma2 <- 6
+
+x <- runif(n)
+yComplete <- rnorm(n, beta0 + beta1*x, sqrt(sigma2))
+
+
+# censor the sequence, 20% exceedance
+tau1 <- quantile(yComplete, .8)
+c <- 20
+
+# calculate initial value
+
+yTruncate <- yComplete
+yTruncate[yTruncate>tau1] <- NA
+xTruncate <- x
+xTruncate[yTruncate>tau1] <- NA
+mod <- lm(yTruncate~xTruncate)
+betai <- summary(mod)$coef
+sigmai <- summary(mod)$sigma
+
+##
+step = 0
+for (i in 1:1000){
+  # calculate Expectation and variance of Z based on current theta
+  ymean <- betai[1]+betai[2]*mean(x)
+  tauStar <- (tau1-ymean)/sigmai
+  thou <- dnorm(tauStar)/(1-pnorm(tauStar))
+  EZ <- ymean + sigmai* thou
+  varZ <- sigmai^2*(1+tauStar*thou-thou^2)
+  
+  # construct new y sequence
+  yNew <- yComplete
+  yNew[yNew>tau1] <- EZ
+  mod <- lm(yNew~x)
+  # break the optimization if the difference between new and old parameters are small enough
+  if (abs(summary(mod)$coef[1]-betai[1]) < 1e-16 & abs(summary(mod)$coef[2]-betai[2])< 1e-16)
+  {break}
+  # update theta
+  betai <- summary(mod)$coef
+  sigmai <-sqrt(summary(mod)$sigma + c*varZ/n)
+  step <- step + 1
+  
+}
+
+cat("theta is {" ,c(betai[1],betai[2], sigmai), "}, taking", step, "steps")
+@
+
+for sequence of 80\% exceedance
+<<rchunk-51>>==
+set.seed(1)
+n <- 100
+beta0 <- 1
+beta1 <- 2
+sigma2 <- 6
+
+x <- runif(n)
+yComplete <- rnorm(n, beta0 + beta1*x, sqrt(sigma2))
+
+# censor the sequence, 80%exceedance
+tau2 <- quantile(yComplete, 0.2)
+c <- 80
+# calculate initial value
+
+yTruncate <- yComplete
+yTruncate[yTruncate>tau2] <- NA
+xTruncate <- x
+xTruncate[yTruncate>tau2] <- NA
+mod <- lm(yTruncate~xTruncate)
+betai <- summary(mod)$coef
+sigmai <- summary(mod)$sigma
+
+##
+step = 0
+for (i in 1:1000){
+  yEstimate <- sapply(x, function(x) betai[1]+betai[2]*x)
+  mean <- mean(yEstimate)
+  tauStar <- (tau2-mean)/sigmai
+  thou <- dnorm(tauStar)/(1-pnorm(tauStar))
+  EZ <- mean + sigmai* thou
+  varZ <- sigmai^2*(1+tauStar*thou-thou^2)
+  
+  # construct new y sequence
+  yNew <- yComplete
+  yNew[yNew>tau2] <- EZ
+  mod <- lm(yNew~x)
+  # break the optimization if the difference between new and old parameters are small enough
+  if (abs(summary(mod)$coef[1]-betai[1]) < 1e-16 & abs(summary(mod)$coef[2]-betai[2])< 1e-16)
+  {break}
+  betai <- summary(mod)$coef
+  sigmai <-sqrt(summary(mod)$sigma + c*varZ/n)
+  step <- step + 1
+  
+}
+
+
+cat("theta is {" ,c(betai[1],betai[2], sigmai), "}, taking", step, "steps")
+
+@
+
+\subsection*{(d)}
+
+
+<<r-chunk6>>=
+# simulate data
+set.seed(1)
+n <- 100
+beta0 <- 1
+beta1 <- 2
+sigma2 <- 6
+
+x <- runif(n)
+yComplete <- rnorm(n, beta0 + beta1*x, sqrt(sigma2))
+
+# generate truncated sequence, 20%exceedance
+tau1 <- quantile(yComplete, .8)
+
+# construct truncated sequece
+yTruncate <- yComplete
+xTruncate <- x
+xTruncate <- xTruncate[yTruncate < tau1]
+yTruncate <- yTruncate[yTruncate < tau1]
+n<- length(xTruncate)
+
+
+# theta being {beta0, beta1, log(sigma) }
+LL <- function(theta, x, y){
+  yEstimate <- sapply (x, function(x) theta[1]+theta[2]*x)
+  rss <-sum((yEstimate-y)^2)
+  return(-n/2*log(2*3.14)-n*theta[3]-0.5*exp(-2*theta[3])*rss)
+}
+
+optim(c(0,0,0), LL, y = yTruncate,x = xTruncate, method = 'BFGS', control = list(trace = TRUE, parscale = c(1,1,0.1))) 
+
+# try several initial points to avoid local minima
+optim(c(1.5,1.5,10), LL, y = yTruncate,x = xTruncate, method = 'BFGS', control = list(trace = TRUE, parscale = c(1,1,0.1))) 
+
+optim(c(1,2,0.4), LL, y = yTruncate,x = xTruncate, method = 'BFGS', control = list(trace = TRUE, parscale = c(1,1,0.1))) 
+
+optim(c(1,2,10), LL, y = yTruncate,x = xTruncate, method = 'BFGS', control = list(trace = TRUE, parscale = c(1,1, 1e-12))) 
+ 
+@
+So we can see that with theta = {1,2 ,10}, the log-liklyhood reaches its maximum.
+
+And EM algorithm uses less steps.
+\end{document}
